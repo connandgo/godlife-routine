@@ -358,7 +358,12 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       .select('habits, checks, diaries, theme_idx, nickname')
       .eq('user_id', userId)
       .single()
-      .then(({ data: row }) => {
+      .then(({ data: row, error }) => {
+        if (error && error.code !== 'PGRST116') {
+          // PGRST116 = row not found (정상), 그 외 에러는 로드 실패 → 저장 막기
+          setDbLoaded(true);
+          return;
+        }
         if (row) {
           const loaded: AppData = {
             habits: row.habits ?? DEFAULT_HABITS,
@@ -378,7 +383,8 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
             setNicknameModal(true);
           }
         } else {
-          // 첫 로그인 — 캐시된 닉네임 없을 때만 모달
+          // 첫 로그인 (row 없음) — default 데이터로 serverDataRef 초기화
+          serverDataRef.current = { habits: DEFAULT_HABITS, checks: {}, diaries: {} };
           if (!cachedNickname) setNicknameModal(true);
         }
         setDbLoaded(true);
@@ -401,9 +407,10 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   // Save to Supabase — 서버 데이터와 다를 때만 저장
   useEffect(() => {
     if (!dbLoaded) return;
-    // 서버에서 받은 것과 동일하면 저장 안 함 (초기 로드 덮어쓰기 방지)
-    if (serverDataRef.current &&
-        JSON.stringify(data) === JSON.stringify(serverDataRef.current)) return;
+    // 서버 로드 전이거나 실패했으면 저장 안 함 (덮어쓰기 방지)
+    if (!serverDataRef.current) return;
+    // 서버에서 받은 것과 동일하면 저장 안 함
+    if (JSON.stringify(data) === JSON.stringify(serverDataRef.current)) return;
     const cacheKey = `godlife-cache-${userId}`;
     localStorage.setItem(cacheKey, JSON.stringify(data));
     const timer = setTimeout(() => {
