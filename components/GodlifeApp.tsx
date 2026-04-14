@@ -362,11 +362,14 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           };
           setData(loaded);
           setThemeIdx(row.theme_idx ?? 0);
-          setNickname(row.nickname ?? '');
+          const savedNickname = row.nickname ?? '';
+          setNickname(savedNickname);
           localStorage.setItem(cacheKey, JSON.stringify(loaded));
           localStorage.setItem(themeKey, String(row.theme_idx ?? 0));
+          // 닉네임 없을 때만 모달
+          if (!savedNickname) setNicknameModal(true);
         } else {
-          // 첫 로그인 — 닉네임 설정 모달
+          // 첫 로그인
           setNicknameModal(true);
         }
         setDbLoaded(true);
@@ -396,6 +399,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         habits: data.habits,
         checks: data.checks,
         diaries: data.diaries,
+        nickname,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' });
     }, 800);
