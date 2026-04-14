@@ -486,7 +486,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       flushSave(data, themeIdx);
     }, 500);
     return () => clearTimeout(timer);
-  }, [data, dbLoaded, userId, flushSave]);
+  }, [data, themeIdx, dbLoaded, userId, flushSave]);
 
   // 탭 전환 / 새로고침 시 미저장 데이터 즉시 저장
   useEffect(() => {
