@@ -551,7 +551,13 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         todayRowRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
       }
       if (habitPinnedToToday.current && year === todayY && month === todayM) {
-        todayHabitRowRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        const row = todayHabitRowRef.current;
+        const container = habitListRef.current;
+        if (row && container) {
+          const thead = container.querySelector('thead');
+          const theadH = thead ? thead.getBoundingClientRect().height : 0;
+          container.scrollTop = row.offsetTop - theadH;
+        }
       }
     }, 80);
   }, []);
@@ -565,7 +571,13 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         diaryListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       }
       if (year === todayY && month === todayM && habitPinnedToToday.current) {
-        todayHabitRowRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        const row = todayHabitRowRef.current;
+        const container = habitListRef.current;
+        if (row && container) {
+          const thead = container.querySelector('thead');
+          const theadH = thead ? thead.getBoundingClientRect().height : 0;
+          container.scrollTop = row.offsetTop - theadH;
+        }
       } else {
         habitListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       }
