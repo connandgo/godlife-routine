@@ -434,8 +434,16 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           serverDataRef.current = loaded;
           dirtyRef.current = false;
           setData(loaded);
+          // 테마: localStorage 우선 (이미 이 기기에서 설정한 값), 없으면 Supabase 사용
           const cachedThemeVal = localStorage.getItem(themeKey);
-          setThemeIdx(row.theme_idx ?? (cachedThemeVal !== null ? parseInt(cachedThemeVal) : 0));
+          const cachedCustomColor = localStorage.getItem(`godlife-custom-color-${userId}`);
+          if (cachedCustomColor) {
+            setCustomColor(cachedCustomColor); setThemeIdx(-1);
+          } else if (cachedThemeVal !== null) {
+            setThemeIdx(parseInt(cachedThemeVal));
+          } else {
+            setThemeIdx(row.theme_idx ?? 0);
+          }
           const savedNickname = row.nickname || cachedNickname;
           setNickname(savedNickname);
           // Supabase에 nickname이 없으면 localStorage 값으로 저장
@@ -756,7 +764,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   const habitPage = (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Habit Check - upper half */}
-      <div style={{ flex: '0 0 55%', minHeight: 0, display: 'flex', flexDirection: 'column', borderBottom: `1.5px dashed ${theme.divider}`, overflow: 'hidden' }}>
+      <div style={{ flex: '0 0 50%', minHeight: 0, display: 'flex', flexDirection: 'column', borderBottom: `1.5px dashed ${theme.divider}`, overflow: 'hidden' }}>
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -864,7 +872,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       </div>
 
       {/* Graph - lower half */}
-      <div style={{ flex: '0 0 45%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: '0 0 50%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '12px 16px 10px',
