@@ -359,8 +359,11 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
 
   // Scroll ref for today
   const todayRowRef = useRef<HTMLDivElement>(null);
+  const todayHabitRowRef = useRef<HTMLTableRowElement>(null);
   const diaryListRef = useRef<HTMLDivElement>(null);
-  const pinnedToToday = useRef(true); // 오늘 날짜 고정 여부 (스크롤하면 해제)
+  const habitListRef = useRef<HTMLDivElement>(null);
+  const pinnedToToday = useRef(true);
+  const habitPinnedToToday = useRef(true);
 
   const supabase = createClient();
   const [dbLoaded, setDbLoaded] = useState(false);
@@ -547,6 +550,9 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       if (pinnedToToday.current && year === todayY && month === todayM) {
         todayRowRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
       }
+      if (habitPinnedToToday.current && year === todayY && month === todayM) {
+        todayHabitRowRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }
     }, 80);
   }, []);
 
@@ -557,6 +563,11 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         todayRowRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
       } else {
         diaryListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      if (year === todayY && month === todayM && habitPinnedToToday.current) {
+        todayHabitRowRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      } else {
+        habitListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       }
     }, 50);
   }, [year, month]);
@@ -863,7 +874,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         </div>
 
         {/* Table */}
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
+        <div ref={habitListRef} onScroll={() => { habitPinnedToToday.current = false; }} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
           {data.habits.length === 0 ? (
             <div style={{ padding: 20, textAlign: 'center', color: '#aaa', fontSize: 12, fontWeight: 600 }}>
               습관을 추가해보세요
@@ -887,6 +898,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
                   return (
                     <tr
                       key={day}
+                      ref={isToday ? todayHabitRowRef : undefined}
                       style={{
                         backgroundColor: isSelected
                           ? 'rgba(160, 210, 240, 0.1)'
