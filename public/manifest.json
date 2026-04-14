@@ -1,0 +1,18 @@
+{
+  "name": "갓생 루틴",
+  "short_name": "갓생루틴",
+  "description": "나만의 루틴 & 일기 노트",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e8f4fb",
+  "theme_color": "#7ac4e8",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
