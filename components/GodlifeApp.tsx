@@ -348,6 +348,10 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       if (cachedTheme !== null) setThemeIdx(parseInt(cachedTheme));
     } catch {}
 
+    // 닉네임 캐시 즉시 적용 (모달 깜빡임 방지)
+    const cachedNickname = localStorage.getItem(`godlife-nickname-${userId}`) ?? '';
+    if (cachedNickname) setNickname(cachedNickname);
+
     // 2. Supabase에서 최신 데이터 로드
     supabase
       .from('user_data')
@@ -368,10 +372,14 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           setNickname(savedNickname);
           localStorage.setItem(cacheKey, JSON.stringify(loaded));
           localStorage.setItem(themeKey, String(row.theme_idx ?? 0));
-          if (!savedNickname) setNicknameModal(true);
+          if (savedNickname) {
+            localStorage.setItem(`godlife-nickname-${userId}`, savedNickname);
+          } else if (!cachedNickname) {
+            setNicknameModal(true);
+          }
         } else {
-          // 첫 로그인
-          setNicknameModal(true);
+          // 첫 로그인 — 캐시된 닉네임 없을 때만 모달
+          if (!cachedNickname) setNicknameModal(true);
         }
         setDbLoaded(true);
       });
@@ -382,6 +390,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     if (!trimmed) return;
     setNickname(trimmed);
     setNicknameModal(false);
+    localStorage.setItem(`godlife-nickname-${userId}`, trimmed);
     supabase.from('user_data').upsert({
       user_id: userId,
       nickname: trimmed,
