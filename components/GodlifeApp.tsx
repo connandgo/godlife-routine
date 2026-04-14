@@ -345,9 +345,19 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     const themeKey = `godlife-theme-${userId}`;
 
     // 1. 캐시 즉시 적용
+    let localSavedAt = 0;
     try {
       const cached = localStorage.getItem(cacheKey);
-      if (cached) setData(JSON.parse(cached));
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // { data, savedAt } 형식 또는 구버전 AppData 형식 모두 지원
+        if (parsed.savedAt) {
+          setData(parsed.data);
+          localSavedAt = parsed.savedAt;
+        } else {
+          setData(parsed);
+        }
+      }
       const cachedTheme = localStorage.getItem(themeKey);
       if (cachedTheme !== null) setThemeIdx(parseInt(cachedTheme));
     } catch {}
@@ -359,7 +369,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     // 2. Supabase에서 최신 데이터 로드
     supabase
       .from('user_data')
-      .select('habits, checks, diaries, theme_idx, nickname')
+      .select('habits, checks, diaries, theme_idx, nickname, updated_at')
       .eq('user_id', userId)
       .single()
       .then(({ data: row, error }) => {
@@ -377,12 +387,23 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           return;
         }
         if (row) {
-          const loaded: AppData = {
+          const serverSavedAt = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+          const useLocal = localSavedAt > serverSavedAt;
+          const cachedRaw = localStorage.getItem(cacheKey);
+          const localData: AppData | null = (() => {
+            try {
+              if (!cachedRaw) return null;
+              const p = JSON.parse(cachedRaw);
+              return p.savedAt ? p.data : p;
+            } catch { return null; }
+          })();
+
+          const loaded: AppData = useLocal && localData ? localData : {
             habits: row.habits ?? DEFAULT_HABITS,
             checks: row.checks ?? {},
             diaries: row.diaries ?? {},
           };
-          console.log('[godlife] loaded data:', loaded);
+          console.log('[godlife] loaded data (useLocal=' + useLocal + '):', loaded);
           serverDataRef.current = loaded;
           dirtyRef.current = false;
           setData(loaded);
@@ -390,8 +411,12 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           setThemeIdx(row.theme_idx ?? (cachedThemeVal !== null ? parseInt(cachedThemeVal) : 0));
           const savedNickname = row.nickname ?? '';
           setNickname(savedNickname);
-          localStorage.setItem(cacheKey, JSON.stringify(loaded));
+          localStorage.setItem(cacheKey, JSON.stringify({ data: loaded, savedAt: localSavedAt || serverSavedAt }));
           localStorage.setItem(themeKey, String(row.theme_idx ?? 0));
+          // 로컬이 더 최신이면 Supabase에 즉시 반영
+          if (useLocal && localData) {
+            flushSave(localData, row.theme_idx ?? (cachedThemeVal !== null ? parseInt(cachedThemeVal ?? '0') : 0));
+          }
           if (savedNickname) {
             localStorage.setItem(`godlife-nickname-${userId}`, savedNickname);
           } else if (!cachedNickname) {
@@ -438,7 +463,8 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     if (!dbLoaded) return;
     if (!dirtyRef.current) return;
     const cacheKey = `godlife-cache-${userId}`;
-    localStorage.setItem(cacheKey, JSON.stringify(data));
+    const savedAt = Date.now();
+    localStorage.setItem(cacheKey, JSON.stringify({ data, savedAt }));
     pendingSaveRef.current = { data, themeIdx };
     const timer = setTimeout(() => {
       pendingSaveRef.current = null;
