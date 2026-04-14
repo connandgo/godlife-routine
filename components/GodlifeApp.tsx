@@ -743,13 +743,16 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       fontFamily: "'Nunito', sans-serif",
     }}>
       <div style={{ width: '90%', maxWidth: '90vw' }}>
-        {/* App title */}
-        <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', gap: 4 }}>
-          <span style={{ fontSize: 32, fontWeight: 400, color: '#3a3a3a', fontFamily: "'Jua', sans-serif", letterSpacing: '-0.5px' }}>
-            {nickname ? `${nickname}의 ` : ''}{month}월 갓생 루틴 ✨
-          </span>
-          {/* Right controls: email + logout + theme picker */}
-          <div style={{ position: 'absolute', right: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* App header */}
+        <div style={{ marginBottom: 10 }}>
+          {/* 제목 */}
+          <div style={{ textAlign: 'center', marginBottom: 6 }}>
+            <span className="app-title" style={{ fontWeight: 400, color: '#3a3a3a', fontFamily: "'Jua', sans-serif", letterSpacing: '-0.5px' }}>
+              {nickname ? `${nickname}의 ` : ''}{month}월 갓생 루틴 ✨
+            </span>
+          </div>
+          {/* 컨트롤 버튼들 */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, position: 'relative' }}>
             <button
               onClick={() => { setNicknameInput(nickname); setNicknameModal(true); }}
               title="닉네임 변경"
@@ -760,36 +763,38 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
               }}
             >✏️ 닉네임</button>
             {userSwitcher}
-            <button
-              onClick={() => setShowThemePicker(v => !v)}
-              title="테마 변경"
-              style={{
-                width: 32, height: 32, borderRadius: '50%', border: `2px solid ${theme.noteBorder}`,
-                background: theme.accent1, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              }}
-            />
-            {showThemePicker && (
-              <div style={{
-                position: 'absolute', right: 0, top: 38,
-                background: '#fff', borderRadius: 16, border: `1.5px solid ${theme.noteBorder}`,
-                padding: '10px 12px', display: 'flex', gap: 8, zIndex: 50,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-              }}>
-                {THEMES.map((t, i) => (
-                  <button
-                    key={i}
-                    onClick={() => { setThemeIdx(i); setShowThemePicker(false); }}
-                    title={t.name}
-                    style={{
-                      width: 28, height: 28, borderRadius: '50%', border: i === themeIdx ? '2.5px solid #3a3a3a' : '2px solid transparent',
-                      background: t.accent1, cursor: 'pointer',
-                      outline: 'none', transition: 'transform 0.1s',
-                      transform: i === themeIdx ? 'scale(1.15)' : 'scale(1)',
-                    }}
-                  />
-                ))}
-              </div>
-            )}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowThemePicker(v => !v)}
+                title="테마 변경"
+                style={{
+                  width: 28, height: 28, borderRadius: '50%', border: `2px solid ${theme.noteBorder}`,
+                  background: theme.accent1, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                }}
+              />
+              {showThemePicker && (
+                <div style={{
+                  position: 'absolute', right: 0, top: 34,
+                  background: '#fff', borderRadius: 16, border: `1.5px solid ${theme.noteBorder}`,
+                  padding: '10px 12px', display: 'flex', gap: 8, zIndex: 50,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                }}>
+                  {THEMES.map((t, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setThemeIdx(i); setShowThemePicker(false); }}
+                      title={t.name}
+                      style={{
+                        width: 28, height: 28, borderRadius: '50%', border: i === themeIdx ? '2.5px solid #3a3a3a' : '2px solid transparent',
+                        background: t.accent1, cursor: 'pointer',
+                        outline: 'none', transition: 'transform 0.1s',
+                        transform: i === themeIdx ? 'scale(1.15)' : 'scale(1)',
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1128,9 +1133,12 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
 
       {/* Responsive styles */}
       <style>{`
+        .app-title { font-size: 32px; }
+
         @media (max-width: 768px) {
+          .app-title { font-size: 20px !important; }
           .mobile-tabs { display: flex !important; }
-          .notebook { display: block !important; height: calc(100vh - 130px) !important; }
+          .notebook { display: block !important; height: calc(100vh - 150px) !important; }
           .left-page {
             display: ${activeTab === 'diary' ? 'flex' : 'none'} !important;
             flex: 1 !important;
