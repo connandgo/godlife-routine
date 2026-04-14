@@ -359,6 +359,8 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
 
   // Scroll ref for today
   const todayRowRef = useRef<HTMLDivElement>(null);
+  const diaryListRef = useRef<HTMLDivElement>(null);
+  const pinnedToToday = useRef(true); // 오늘 날짜 고정 여부 (스크롤하면 해제)
 
   const supabase = createClient();
   const [dbLoaded, setDbLoaded] = useState(false);
@@ -539,14 +541,22 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     }, { onConflict: 'user_id' });
   }, [themeIdx, dbLoaded, userId]);
 
-  // Scroll to today whenever month changes
+  // 초기 로드 시 오늘 날짜로 스크롤
   useEffect(() => {
     setTimeout(() => {
-      if (year === todayY && month === todayM) {
-        todayRowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (pinnedToToday.current && year === todayY && month === todayM) {
+        todayRowRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }
+    }, 80);
+  }, []);
+
+  // 월 변경 시 스크롤
+  useEffect(() => {
+    setTimeout(() => {
+      if (year === todayY && month === todayM && pinnedToToday.current) {
+        todayRowRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
       } else {
-        // 다른 달이면 맨 위로
-        todayRowRef.current?.parentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+        diaryListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       }
     }, 50);
   }, [year, month]);
@@ -728,7 +738,11 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       </div>
 
       {/* Date list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+      <div
+        ref={diaryListRef}
+        onScroll={() => { pinnedToToday.current = false; }}
+        style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}
+      >
         {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
           const dow = getDayOfWeek(year, month, day);
           const isSat = dow === 6;
