@@ -413,7 +413,6 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         habits: data.habits,
         checks: data.checks,
         diaries: data.diaries,
-        nickname,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' });
     }, 800);
