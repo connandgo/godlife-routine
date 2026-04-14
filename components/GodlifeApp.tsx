@@ -409,8 +409,12 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           setData(loaded);
           const cachedThemeVal = localStorage.getItem(themeKey);
           setThemeIdx(row.theme_idx ?? (cachedThemeVal !== null ? parseInt(cachedThemeVal) : 0));
-          const savedNickname = row.nickname ?? '';
+          const savedNickname = row.nickname || cachedNickname;
           setNickname(savedNickname);
+          // Supabase에 nickname이 없으면 localStorage 값으로 저장
+          if (!row.nickname && cachedNickname) {
+            supabase.from('user_data').upsert({ user_id: userId, nickname: cachedNickname, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+          }
           localStorage.setItem(cacheKey, JSON.stringify({ data: loaded, savedAt: localSavedAt || serverSavedAt }));
           localStorage.setItem(themeKey, String(row.theme_idx ?? 0));
           // 로컬이 더 최신이면 Supabase에 즉시 반영
@@ -419,7 +423,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           }
           if (savedNickname) {
             localStorage.setItem(`godlife-nickname-${userId}`, savedNickname);
-          } else if (!cachedNickname) {
+          } else {
             setNicknameModal(true);
           }
         } else {
