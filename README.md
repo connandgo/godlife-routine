@@ -41,35 +41,3 @@ cp .env.example .env.local
 # 개발 서버 실행
 npm run dev
 ```
-
-## 환경변수
-
-```
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-## Supabase DB 설정
-
-```sql
-create table user_data (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id) on delete cascade not null unique,
-  habits text[] default '{}',
-  checks jsonb default '{}',
-  diaries jsonb default '{}',
-  theme_idx int default 0,
-  nickname text default '',
-  updated_at timestamptz default now()
-);
-
-alter table user_data enable row level security;
-
-create policy "본인 데이터만 접근"
-  on user_data for all
-  using (auth.uid() = user_id);
-```
-
-## 라이브
-
-[godlife-routine.vercel.app](https://godlife-routine.vercel.app)
