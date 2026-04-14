@@ -360,8 +360,9 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       .eq('user_id', userId)
       .single()
       .then(({ data: row, error }) => {
+        console.log('[godlife] supabase load:', { row, error });
         if (error && error.code !== 'PGRST116') {
-          // PGRST116 = row not found (정상), 그 외 에러는 로드 실패 → 저장 막기
+          console.error('[godlife] load error:', error);
           setDbLoaded(true);
           return;
         }
@@ -371,8 +372,9 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
             checks: row.checks ?? {},
             diaries: row.diaries ?? {},
           };
-          serverDataRef.current = loaded; // 서버 데이터 보관
-          dirtyRef.current = false; // 서버 로드 완료 — 유저 변경 없음
+          console.log('[godlife] loaded data:', loaded);
+          serverDataRef.current = loaded;
+          dirtyRef.current = false;
           setData(loaded);
           setThemeIdx(row.theme_idx ?? 0);
           const savedNickname = row.nickname ?? '';
@@ -414,13 +416,17 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     const cacheKey = `godlife-cache-${userId}`;
     localStorage.setItem(cacheKey, JSON.stringify(data));
     const timer = setTimeout(() => {
+      console.log('[godlife] saving to supabase:', data);
       supabase.from('user_data').upsert({
         user_id: userId,
         habits: data.habits,
         checks: data.checks,
         diaries: data.diaries,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
+      }, { onConflict: 'user_id' }).then(({ error }) => {
+        if (error) console.error('[godlife] save error:', error);
+        else console.log('[godlife] save success');
+      });
     }, 800);
     return () => clearTimeout(timer);
   }, [data, dbLoaded, userId]);
