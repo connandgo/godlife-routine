@@ -361,8 +361,14 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       .single()
       .then(({ data: row, error }) => {
         console.log('[godlife] supabase load:', { row, error });
-        // PGRST116 = no rows, 406 = no rows (.single() 방식) — 둘 다 정상 (첫 가입)
-        if (error && error.code !== 'PGRST116' && error.status !== 406) {
+        // row가 없으면 첫 가입으로 처리 (PGRST116 또는 406)
+        if (error && row === null) {
+          // 진짜 에러인지 확인 (row not found는 정상)
+          if (error.code !== 'PGRST116') {
+            console.error('[godlife] load error:', error);
+          }
+          // 어느 쪽이든 row 없음으로 처리 (아래 else 브랜치로 흐름)
+        } else if (error) {
           console.error('[godlife] load error:', error);
           setDbLoaded(true);
           return;
