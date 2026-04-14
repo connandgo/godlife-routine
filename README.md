@@ -19,17 +19,6 @@
 - 📱 **PWA** — 모바일 홈 화면에 설치 가능
 - 🔄 **실시간 저장** — Supabase 연동으로 어느 기기에서나 동기화
 
-## 기술 스택
-
-| 분류 | 기술 |
-|------|------|
-| 프레임워크 | Next.js 16 (App Router) |
-| 스타일 | Tailwind CSS + Inline Styles |
-| 폰트 | Nunito, Jua (Google Fonts) |
-| 그래프 | Canvas API |
-| 인증 / DB | Supabase |
-| 배포 | Vercel |
-
 ## 로컬 실행
 
 ```bash
