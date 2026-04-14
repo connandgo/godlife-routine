@@ -156,8 +156,9 @@ const ChevronRight = () => (
 );
 
 // ─── Achievement Graph ────────────────────────────────────────────────────────
-function AchievementGraph({ year, month, habits, checks, accent1, accent2 }: {
+function AchievementGraph({ year, month, habits, checks, accent1, accent2, selectedHabit }: {
   year: number; month: number; habits: string[]; checks: Record<string, CheckState>; accent1: string; accent2: string;
+  selectedHabit: number | null; // null = 전체
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -189,8 +190,10 @@ function AchievementGraph({ year, month, habits, checks, accent1, accent2 }: {
     const graphW = w - padL - padR;
     const graphH = h - padT - padB;
 
+    const isSingle = selectedHabit !== null;
+    const ySteps = isSingle ? 1 : Math.min(totalHabits, 4);
+
     // Grid lines
-    const ySteps = Math.min(totalHabits, 4);
     ctx.strokeStyle = accent1 + 'aa';
     ctx.lineWidth = 1;
     for (let i = 0; i <= ySteps; i++) {
@@ -208,9 +211,9 @@ function AchievementGraph({ year, month, habits, checks, accent1, accent2 }: {
     ctx.font = '700 9px Nunito, sans-serif';
     ctx.textAlign = 'right';
     for (let i = 0; i <= ySteps; i++) {
-      const val = Math.round((i / ySteps) * totalHabits);
+      const label = isSingle ? (i === 0 ? 'X' : 'O') : String(Math.round((i / ySteps) * totalHabits));
       const y = padT + graphH - (i / ySteps) * graphH;
-      ctx.fillText(String(val), padL - 4, y + 3);
+      ctx.fillText(label, padL - 4, y + 3);
     }
 
     // X-axis date labels (~8 labels)
@@ -222,20 +225,27 @@ function AchievementGraph({ year, month, habits, checks, accent1, accent2 }: {
       ctx.fillText(String(d), x, h - padB + 12);
     }
 
-    // Compute daily achievement counts
+    // Compute daily points
     const points: { x: number; y: number; count: number; isToday: boolean; future: boolean }[] = [];
     for (let d = 1; d <= daysInMonth; d++) {
-      const count = habits.reduce((acc, _, idx) => {
-        const key = checkKey(year, month, d, idx);
-        return acc + (checks[key] === 'O' ? 1 : 0);
-      }, 0);
+      let count: number;
+      if (isSingle) {
+        const key = checkKey(year, month, d, selectedHabit!);
+        count = checks[key] === 'O' ? 1 : 0;
+      } else {
+        count = habits.reduce((acc, _, idx) => {
+          const key = checkKey(year, month, d, idx);
+          return acc + (checks[key] === 'O' ? 1 : 0);
+        }, 0);
+      }
+      const maxVal = isSingle ? 1 : totalHabits;
       const isToday = today.getFullYear() === year && today.getMonth() + 1 === month && today.getDate() === d;
       const future = year > today.getFullYear() ||
         (year === today.getFullYear() && month > today.getMonth() + 1) ||
         (year === today.getFullYear() && month === today.getMonth() + 1 && d > today.getDate());
 
       const xPos = padL + ((d - 1) / Math.max(daysInMonth - 1, 1)) * graphW;
-      const yPos = padT + graphH - (count / totalHabits) * graphH;
+      const yPos = padT + graphH - (count / maxVal) * graphH;
       points.push({ x: xPos, y: yPos, count, isToday, future });
     }
 
@@ -280,7 +290,7 @@ function AchievementGraph({ year, month, habits, checks, accent1, accent2 }: {
         ctx.fill();
       }
     }
-  }, [year, month, habits, checks, accent1, accent2]);
+  }, [year, month, habits, checks, accent1, accent2, selectedHabit]);
 
   useEffect(() => {
     draw();
@@ -318,6 +328,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   const [diaryText, setDiaryText] = useState('');
   const [showHabitModal, setShowHabitModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
+  const [selectedGraphHabit, setSelectedGraphHabit] = useState<number | null>(null);
   const [newHabit, setNewHabit] = useState('');
 
   // Mobile tab
@@ -847,8 +858,22 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           <GraphIcon color={theme.accent1} />
           <span style={{ fontSize: 14, fontWeight: 800, color: '#3a3a3a' }}>달성률 그래프</span>
         </div>
-        <div style={{ flex: 1, padding: '8px 12px 4px' }}>
-          <AchievementGraph year={year} month={month} habits={data.habits} checks={data.checks} accent1={theme.accent1} accent2={theme.accent2} />
+        {/* 습관 탭 */}
+        <div style={{ display: 'flex', gap: 6, padding: '8px 12px 0', flexWrap: 'wrap', flexShrink: 0 }}>
+          {['전체', ...data.habits].map((label, i) => {
+            const idx = i === 0 ? null : i - 1;
+            const active = selectedGraphHabit === idx;
+            return (
+              <button key={i} onClick={() => setSelectedGraphHabit(idx)} style={{
+                padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${active ? theme.accent1 : theme.noteBorder}`,
+                background: active ? theme.accent1 : '#fff',
+                color: active ? '#fff' : '#888', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+              }}>{label}</button>
+            );
+          })}
+        </div>
+        <div style={{ flex: 1, padding: '6px 12px 4px' }}>
+          <AchievementGraph year={year} month={month} habits={data.habits} checks={data.checks} accent1={theme.accent1} accent2={theme.accent2} selectedHabit={selectedGraphHabit} />
         </div>
       </div>
     </div>
