@@ -344,6 +344,8 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   const [selectedGraphHabit, setSelectedGraphHabit] = useState<number | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(todayY);
+  const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 });
+  const datePickerBtnRef = useRef<HTMLButtonElement>(null);
   const [newHabit, setNewHabit] = useState('');
 
   // Mobile tab
@@ -680,16 +682,22 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           <button onClick={prevMonth} style={navBtnStyle}><ChevronLeft /></button>
           <div style={{ position: 'relative' }}>
             <button
-              onClick={() => { setPickerYear(year); setShowDatePicker(v => !v); }}
+              ref={datePickerBtnRef}
+              onClick={() => {
+                const rect = datePickerBtnRef.current?.getBoundingClientRect();
+                if (rect) setPickerPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
+                setPickerYear(year);
+                setShowDatePicker(v => !v);
+              }}
               style={{ fontSize: 13, fontWeight: 800, color: theme.accent2, minWidth: 60, textAlign: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', borderRadius: 6 }}
             >
               {year}.{String(month).padStart(2, '0')}
             </button>
             {showDatePicker && (
               <div style={{
-                position: 'absolute', top: 28, left: '50%', transform: 'translateX(-50%)',
+                position: 'fixed', top: pickerPos.top, left: pickerPos.left, transform: 'translateX(-50%)',
                 background: '#fff', borderRadius: 14, border: `1.5px solid ${theme.noteBorder}`,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)', zIndex: 200, padding: 12, minWidth: 200,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12)', zIndex: 9999, padding: 12, minWidth: 200,
               }}>
                 {/* 연도 선택 */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
