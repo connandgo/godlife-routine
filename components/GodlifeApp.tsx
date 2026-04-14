@@ -361,7 +361,8 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       .single()
       .then(({ data: row, error }) => {
         console.log('[godlife] supabase load:', { row, error });
-        if (error && error.code !== 'PGRST116') {
+        // PGRST116 = no rows, 406 = no rows (.single() 방식) — 둘 다 정상 (첫 가입)
+        if (error && error.code !== 'PGRST116' && error.status !== 406) {
           console.error('[godlife] load error:', error);
           setDbLoaded(true);
           return;
