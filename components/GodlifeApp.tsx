@@ -331,6 +331,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   const supabase = createClient();
   const [dbLoaded, setDbLoaded] = useState(false);
   const serverDataRef = useRef<AppData | null>(null); // 서버에서 받은 데이터 보관
+  const dirtyRef = useRef(false); // 유저가 실제로 수정했을 때만 true
   const [nickname, setNickname] = useState('');
   const [nicknameModal, setNicknameModal] = useState(false);
   const [nicknameInput, setNicknameInput] = useState('');
@@ -371,6 +372,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
             diaries: row.diaries ?? {},
           };
           serverDataRef.current = loaded; // 서버 데이터 보관
+          dirtyRef.current = false; // 서버 로드 완료 — 유저 변경 없음
           setData(loaded);
           setThemeIdx(row.theme_idx ?? 0);
           const savedNickname = row.nickname ?? '';
@@ -385,6 +387,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         } else {
           // 첫 로그인 (row 없음) — default 데이터로 serverDataRef 초기화
           serverDataRef.current = { habits: DEFAULT_HABITS, checks: {}, diaries: {} };
+          dirtyRef.current = false;
           if (!cachedNickname) setNicknameModal(true);
         }
         setDbLoaded(true);
@@ -404,17 +407,13 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     }, { onConflict: 'user_id' });
   };
 
-  // Save to Supabase — 서버 데이터와 다를 때만 저장
+  // Save to Supabase — 유저가 실제로 수정했을 때만 저장
   useEffect(() => {
     if (!dbLoaded) return;
-    // 서버 로드 전이거나 실패했으면 저장 안 함 (덮어쓰기 방지)
-    if (!serverDataRef.current) return;
-    // 서버에서 받은 것과 동일하면 저장 안 함
-    if (JSON.stringify(data) === JSON.stringify(serverDataRef.current)) return;
+    if (!dirtyRef.current) return; // 유저 변경 없으면 저장 안 함 (로드 직후 덮어쓰기 방지)
     const cacheKey = `godlife-cache-${userId}`;
     localStorage.setItem(cacheKey, JSON.stringify(data));
     const timer = setTimeout(() => {
-      serverDataRef.current = data; // 저장 후 기준 업데이트
       supabase.from('user_data').upsert({
         user_id: userId,
         habits: data.habits,
@@ -465,6 +464,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
 
   // ── Toggle check
   const toggleCheck = (day: number, habitIdx: number) => {
+    dirtyRef.current = true;
     const key = checkKey(year, month, day, habitIdx);
     setData(prev => {
       const cur = prev.checks[key] || '';
@@ -489,6 +489,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   // ── Save diary
   const saveDiary = () => {
     if (!diaryModal) return;
+    dirtyRef.current = true;
     const key = dateKey(diaryModal.y, diaryModal.m, diaryModal.d);
     setData(prev => ({
       ...prev,
@@ -501,6 +502,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   const addHabit = () => {
     const trimmed = newHabit.trim();
     if (!trimmed || data.habits.length >= 8) return;
+    dirtyRef.current = true;
     setData(prev => ({ ...prev, habits: [...prev.habits, trimmed] }));
     setNewHabit('');
     setShowHabitModal(false);
@@ -508,6 +510,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
 
   // ── Delete habit
   const deleteHabit = (index: number) => {
+    dirtyRef.current = true;
     setData(prev => {
       const newHabits = prev.habits.filter((_, i) => i !== index);
       const newChecks: Record<string, CheckState> = {};
