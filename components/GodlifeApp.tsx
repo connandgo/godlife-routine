@@ -342,6 +342,8 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   const [showHabitModal, setShowHabitModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [selectedGraphHabit, setSelectedGraphHabit] = useState<number | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(todayY);
   const [newHabit, setNewHabit] = useState('');
 
   // Mobile tab
@@ -676,9 +678,43 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button onClick={prevMonth} style={navBtnStyle}><ChevronLeft /></button>
-          <span style={{ fontSize: 13, fontWeight: 800, color: theme.accent2, minWidth: 60, textAlign: 'center' }}>
-            {year}.{String(month).padStart(2, '0')}
-          </span>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => { setPickerYear(year); setShowDatePicker(v => !v); }}
+              style={{ fontSize: 13, fontWeight: 800, color: theme.accent2, minWidth: 60, textAlign: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', borderRadius: 6 }}
+            >
+              {year}.{String(month).padStart(2, '0')}
+            </button>
+            {showDatePicker && (
+              <div style={{
+                position: 'absolute', top: 28, left: '50%', transform: 'translateX(-50%)',
+                background: '#fff', borderRadius: 14, border: `1.5px solid ${theme.noteBorder}`,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12)', zIndex: 200, padding: 12, minWidth: 200,
+              }}>
+                {/* 연도 선택 */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <button onClick={() => setPickerYear(y => y - 1)} style={{ ...navBtnStyle, width: 24, height: 24 }}><ChevronLeft /></button>
+                  <span style={{ fontWeight: 800, fontSize: 13, color: '#3a3a3a' }}>{pickerYear}년</span>
+                  <button onClick={() => setPickerYear(y => y + 1)} style={{ ...navBtnStyle, width: 24, height: 24 }}><ChevronRight /></button>
+                </div>
+                {/* 월 선택 */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+                    const isSelected = pickerYear === year && m === month;
+                    return (
+                      <button key={m} onClick={() => { setYear(pickerYear); setMonth(m); setShowDatePicker(false); }}
+                        style={{
+                          padding: '5px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                          background: isSelected ? theme.accent1 : 'transparent',
+                          color: isSelected ? '#fff' : '#555',
+                        }}
+                      >{m}월</button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
           <button onClick={nextMonth} style={navBtnStyle}><ChevronRight /></button>
         </div>
       </div>
