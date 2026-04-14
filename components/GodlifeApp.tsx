@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase';
 
+// ─── Sanitize ────────────────────────────────────────────────────────────────
+const sanitize = (str: string) => str.replace(/[<>]/g, '');
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 type CheckState = 'O' | 'X' | '';
 
@@ -404,7 +407,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   }, [userId]);
 
   const saveNickname = (name: string) => {
-    const trimmed = name.trim();
+    const trimmed = sanitize(name.trim());
     if (!trimmed) return;
     setNickname(trimmed);
     setNicknameModal(false);
@@ -506,14 +509,14 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     const key = dateKey(diaryModal.y, diaryModal.m, diaryModal.d);
     setData(prev => ({
       ...prev,
-      diaries: { ...prev.diaries, [key]: { emotion: diaryEmotion, text: diaryText } },
+      diaries: { ...prev.diaries, [key]: { emotion: diaryEmotion, text: sanitize(diaryText) } },
     }));
     setDiaryModal(null);
   };
 
   // ── Add habit
   const addHabit = () => {
-    const trimmed = newHabit.trim();
+    const trimmed = sanitize(newHabit.trim());
     if (!trimmed || data.habits.length >= 8) return;
     dirtyRef.current = true;
     setData(prev => ({ ...prev, habits: [...prev.habits, trimmed] }));
