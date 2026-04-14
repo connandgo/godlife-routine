@@ -785,6 +785,9 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
                 fontSize: 11, fontWeight: 700, color: '#aaa', cursor: 'pointer',
               }}
             >✏️ 닉네임</button>
+            {userEmail && (
+              <span style={{ fontSize: 10, color: '#bbb', fontWeight: 600 }}>{userEmail}</span>
+            )}
             {userSwitcher}
             <div style={{ position: 'relative' }}>
               <button
