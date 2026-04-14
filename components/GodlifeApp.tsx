@@ -542,6 +542,42 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     });
   };
 
+  const moveHabit = (index: number, dir: -1 | 1) => {
+    const to = index + dir;
+    if (to < 0 || to >= data.habits.length) return;
+    dirtyRef.current = true;
+    setData(prev => {
+      const newHabits = [...prev.habits];
+      [newHabits[index], newHabits[to]] = [newHabits[to], newHabits[index]];
+      // checks의 인덱스도 교체
+      const newChecks: Record<string, CheckState> = {};
+      for (const [key, val] of Object.entries(prev.checks)) {
+        const parts = key.split('-');
+        if (parts.length < 4) { newChecks[key] = val; continue; }
+        const hIdx = parseInt(parts[3]);
+        const newIdx = hIdx === index ? to : hIdx === to ? index : hIdx;
+        newChecks[`${parts[0]}-${parts[1]}-${parts[2]}-${newIdx}`] = val;
+      }
+      return { ...prev, habits: newHabits, checks: newChecks };
+    });
+  };
+
+  const [editingHabitIdx, setEditingHabitIdx] = useState<number | null>(null);
+  const [editingHabitVal, setEditingHabitVal] = useState('');
+
+  const saveEditHabit = () => {
+    if (editingHabitIdx === null) return;
+    const trimmed = sanitize(editingHabitVal.trim());
+    if (!trimmed) return;
+    dirtyRef.current = true;
+    setData(prev => {
+      const newHabits = [...prev.habits];
+      newHabits[editingHabitIdx] = trimmed;
+      return { ...prev, habits: newHabits };
+    });
+    setEditingHabitIdx(null);
+  };
+
   // ─── Diary Page (Left) ─────────────────────────────────────────────────────
   const diaryPage = (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -1140,21 +1176,37 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 {data.habits.map((habit, idx) => (
                   <div key={idx} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '10px 14px', borderRadius: 12,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '8px 10px', borderRadius: 12,
                     background: theme.appBg, border: `1px solid ${theme.noteBorder}`,
                   }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#3a3a3a' }}>{habit}</span>
-                    <button
-                      onClick={() => deleteHabit(idx)}
-                      style={{
-                        width: 24, height: 24, borderRadius: '50%',
-                        background: '#f0a8a8', border: 'none', cursor: 'pointer',
-                        fontSize: 12, color: '#fff', fontWeight: 700,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >×</button>
+                    {/* 순서 이동 */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+                      <button onClick={() => moveHabit(idx, -1)} disabled={idx === 0}
+                        style={{ background: 'none', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', fontSize: 10, color: idx === 0 ? '#ddd' : '#aaa', padding: 0, lineHeight: 1 }}>▲</button>
+                      <button onClick={() => moveHabit(idx, 1)} disabled={idx === data.habits.length - 1}
+                        style={{ background: 'none', border: 'none', cursor: idx === data.habits.length - 1 ? 'default' : 'pointer', fontSize: 10, color: idx === data.habits.length - 1 ? '#ddd' : '#aaa', padding: 0, lineHeight: 1 }}>▼</button>
+                    </div>
+                    {/* 이름 (클릭하면 수정) */}
+                    {editingHabitIdx === idx ? (
+                      <input
+                        autoFocus
+                        value={editingHabitVal}
+                        onChange={e => setEditingHabitVal(e.target.value.slice(0, 8))}
+                        onKeyDown={e => { if (e.key === 'Enter') saveEditHabit(); if (e.key === 'Escape') setEditingHabitIdx(null); }}
+                        onBlur={saveEditHabit}
+                        style={{ flex: 1, fontSize: 13, fontWeight: 700, border: `1.5px solid ${theme.accent1}`, borderRadius: 8, padding: '2px 8px', outline: 'none', fontFamily: "'Nunito', sans-serif" }}
+                      />
+                    ) : (
+                      <span
+                        onClick={() => { setEditingHabitIdx(idx); setEditingHabitVal(habit); }}
+                        style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#3a3a3a', cursor: 'text' }}
+                        title="클릭하면 수정"
+                      >{habit}</span>
+                    )}
+                    {/* 삭제 */}
+                    <button onClick={() => deleteHabit(idx)}
+                      style={{ width: 22, height: 22, borderRadius: '50%', background: '#f0a8a8', border: 'none', cursor: 'pointer', fontSize: 11, color: '#fff', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>×</button>
                   </div>
                 ))}
               </div>
