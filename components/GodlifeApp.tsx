@@ -420,28 +420,44 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     }, { onConflict: 'user_id' });
   };
 
+  const pendingSaveRef = useRef<{ data: AppData; themeIdx: number } | null>(null);
+
+  const flushSave = useCallback((d: AppData, t: number) => {
+    supabase.from('user_data').upsert({
+      user_id: userId,
+      habits: d.habits,
+      checks: d.checks,
+      diaries: d.diaries,
+      theme_idx: t,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+  }, [userId]);
+
   // Save to Supabase — 유저가 실제로 수정했을 때만 저장
   useEffect(() => {
     if (!dbLoaded) return;
-    if (!dirtyRef.current) return; // 유저 변경 없으면 저장 안 함 (로드 직후 덮어쓰기 방지)
+    if (!dirtyRef.current) return;
     const cacheKey = `godlife-cache-${userId}`;
     localStorage.setItem(cacheKey, JSON.stringify(data));
+    pendingSaveRef.current = { data, themeIdx };
     const timer = setTimeout(() => {
-      console.log('[godlife] saving to supabase:', data);
-      supabase.from('user_data').upsert({
-        user_id: userId,
-        habits: data.habits,
-        checks: data.checks,
-        diaries: data.diaries,
-        theme_idx: themeIdx,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' }).then(({ error }) => {
-        if (error) console.error('[godlife] save error:', error);
-        else console.log('[godlife] save success');
-      });
-    }, 800);
+      pendingSaveRef.current = null;
+      flushSave(data, themeIdx);
+    }, 500);
     return () => clearTimeout(timer);
-  }, [data, dbLoaded, userId]);
+  }, [data, dbLoaded, userId, flushSave]);
+
+  // 탭 전환 / 새로고침 시 미저장 데이터 즉시 저장
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && pendingSaveRef.current) {
+        flushSave(pendingSaveRef.current.data, pendingSaveRef.current.themeIdx);
+        pendingSaveRef.current = null;
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [flushSave]);
 
   useEffect(() => {
     if (!dbLoaded) return;
