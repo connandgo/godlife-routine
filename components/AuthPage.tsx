@@ -161,13 +161,13 @@ export default function AuthPage() {
         {/* Mode switch */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 20, fontSize: 12, fontWeight: 600 }}>
           {mode !== 'login' && (
-            <button onClick={() => { setMode('login'); setMessage(null); }} style={textBtnStyle}>로그인</button>
+            <button onClick={() => { setMode('login'); setPassword(''); setMessage(null); }} style={textBtnStyle}>로그인</button>
           )}
           {mode !== 'signup' && (
-            <button onClick={() => { setMode('signup'); setMessage(null); }} style={textBtnStyle}>회원가입</button>
+            <button onClick={() => { setMode('signup'); setPassword(''); setMessage(null); }} style={textBtnStyle}>회원가입</button>
           )}
           {mode !== 'reset' && (
-            <button onClick={() => { setMode('reset'); setMessage(null); }} style={textBtnStyle}>비밀번호 찾기</button>
+            <button onClick={() => { setMode('reset'); setPassword(''); setMessage(null); }} style={textBtnStyle}>비밀번호 찾기</button>
           )}
         </div>
 
