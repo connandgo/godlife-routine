@@ -1024,7 +1024,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
             borderRadius: 22,
             border: `1.5px solid ${theme.noteBorder}`,
             overflow: 'hidden',
-            height: 'calc(100vh - 80px)',
+            height: 'calc(100vh - 130px)',
             minHeight: 500,
             display: 'flex',
           }}
@@ -1344,7 +1344,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         @media (max-width: 768px) {
           .app-title { font-size: 20px !important; }
           .mobile-tabs { display: flex !important; }
-          .notebook { display: block !important; height: calc(100vh - 150px) !important; }
+          .notebook { display: block !important; height: calc(100vh - 200px) !important; }
           .left-page {
             display: ${activeTab === 'diary' ? 'flex' : 'none'} !important;
             flex: 1 !important;
