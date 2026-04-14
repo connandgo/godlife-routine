@@ -41,6 +41,19 @@ const THEMES: Theme[] = [
   { name: '레몬', swatch: '#e8d84a', appBg: '#fafaeb', noteBorder: '#f0eaaa', divider: '#f0eaaa', accent1: '#d4c030', accent2: '#b8a820', rowDivider: '#f4f0cc' },
 ];
 
+// hex 색상으로 커스텀 테마 생성
+function makeCustomTheme(hex: string): Theme {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const mix = (v: number) => Math.round(v + (255 - v) * 0.82);
+  const dark = (v: number) => Math.round(v * 0.82);
+  const appBg = `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+  const border = `rgb(${mix(r) - 8},${mix(g) - 8},${mix(b) - 8})`;
+  const accent2 = `rgb(${dark(r)},${dark(g)},${dark(b)})`;
+  return { name: '커스텀', swatch: hex, appBg, noteBorder: border, divider: border, accent1: hex, accent2, rowDivider: border };
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 const EMOTIONS = [
   { emoji: '🔥', label: '감동', bg: '#fff0d8' },
@@ -336,8 +349,9 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
 
   // Theme
   const [themeIdx, setThemeIdx] = useState(0);
+  const [customColor, setCustomColor] = useState<string | null>(null);
   const [showThemePicker, setShowThemePicker] = useState(false);
-  const theme = THEMES[themeIdx];
+  const theme = themeIdx === -1 && customColor ? makeCustomTheme(customColor) : THEMES[themeIdx] ?? THEMES[0];
 
   // Scroll ref for today
   const todayRowRef = useRef<HTMLDivElement>(null);
@@ -357,6 +371,8 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
 
     // 1. 캐시 즉시 적용
     let localSavedAt = 0;
+    const savedCustomColor = localStorage.getItem(`godlife-custom-color-${userId}`);
+    if (savedCustomColor) { setCustomColor(savedCustomColor); setThemeIdx(-1); }
     try {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
@@ -910,9 +926,6 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
                 fontSize: 11, fontWeight: 700, color: '#aaa', cursor: 'pointer',
               }}
             >✏️ 닉네임</button>
-            {userEmail && (
-              <span style={{ fontSize: 10, color: '#bbb', fontWeight: 600 }}>{userEmail}</span>
-            )}
             {userSwitcher}
             <div style={{ position: 'relative' }}>
               <button
@@ -933,7 +946,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
                   {THEMES.map((t, i) => (
                     <button
                       key={i}
-                      onClick={() => { setThemeIdx(i); setShowThemePicker(false); }}
+                      onClick={() => { setThemeIdx(i); setCustomColor(null); localStorage.removeItem(`godlife-custom-color-${userId}`); setShowThemePicker(false); }}
                       title={t.name}
                       style={{
                         width: 28, height: 28, borderRadius: '50%', border: i === themeIdx ? '2.5px solid #3a3a3a' : '2px solid transparent',
@@ -943,6 +956,24 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
                       }}
                     />
                   ))}
+                  {/* 커스텀 컬러피커 */}
+                  <label title="커스텀 색상" style={{
+                    width: 28, height: 28, borderRadius: '50%', cursor: 'pointer',
+                    border: themeIdx === -1 ? '2.5px solid #3a3a3a' : '2px dashed #ccc',
+                    background: customColor ?? 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+                    transform: themeIdx === -1 ? 'scale(1.15)' : 'scale(1)', transition: 'transform 0.1s',
+                  }}>
+                    <input type="color" defaultValue={customColor ?? '#7ac4e8'}
+                      onChange={e => {
+                        const c = e.target.value;
+                        setCustomColor(c);
+                        setThemeIdx(-1);
+                        localStorage.setItem(`godlife-custom-color-${userId}`, c);
+                      }}
+                      style={{ opacity: 0, position: 'absolute', width: 0, height: 0 }}
+                    />
+                  </label>
                 </div>
               )}
             </div>
@@ -1131,9 +1162,9 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
             <input
               autoFocus
               value={newHabit}
-              onChange={e => setNewHabit(e.target.value.slice(0, 8))}
+              onChange={e => setNewHabit(e.target.value.slice(0, 20))}
               onKeyDown={e => { if (e.key === 'Enter') addHabit(); }}
-              placeholder="습관 이름 (최대 8자)"
+              placeholder="습관 이름 (최대 20자)"
               style={{
                 width: '100%', padding: '10px 14px',
                 border: `1.5px solid ${theme.noteBorder}`, borderRadius: 12,
@@ -1265,7 +1296,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
                       <input
                         autoFocus
                         value={editingHabitVal}
-                        onChange={e => setEditingHabitVal(e.target.value.slice(0, 8))}
+                        onChange={e => setEditingHabitVal(e.target.value.slice(0, 20))}
                         onKeyDown={e => { if (e.key === 'Enter') saveEditHabit(); if (e.key === 'Escape') setEditingHabitIdx(null); }}
                         onBlur={saveEditHabit}
                         style={{ flex: 1, fontSize: 13, fontWeight: 700, border: `1.5px solid ${theme.accent1}`, borderRadius: 8, padding: '2px 8px', outline: 'none', fontFamily: "'Nunito', sans-serif" }}
