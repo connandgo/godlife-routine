@@ -53,7 +53,7 @@ export default function AuthPage() {
     }
   };
 
-  const handleOAuth = async (provider: 'google' | 'kakao' | 'naver') => {
+  const handleOAuth = async (provider: 'google') => {
     setLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
