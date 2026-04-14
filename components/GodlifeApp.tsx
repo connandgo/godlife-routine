@@ -386,7 +386,8 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           serverDataRef.current = loaded;
           dirtyRef.current = false;
           setData(loaded);
-          setThemeIdx(row.theme_idx ?? 0);
+          const cachedThemeVal = localStorage.getItem(themeKey);
+          setThemeIdx(row.theme_idx ?? (cachedThemeVal !== null ? parseInt(cachedThemeVal) : 0));
           const savedNickname = row.nickname ?? '';
           setNickname(savedNickname);
           localStorage.setItem(cacheKey, JSON.stringify(loaded));
@@ -432,6 +433,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         habits: data.habits,
         checks: data.checks,
         diaries: data.diaries,
+        theme_idx: themeIdx,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' }).then(({ error }) => {
         if (error) console.error('[godlife] save error:', error);
