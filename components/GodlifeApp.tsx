@@ -14,10 +14,24 @@ interface DiaryEntry {
   text: string;
 }
 
+interface PlanItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+interface HabitGroup {
+  id: string;
+  name: string;
+  habitIndices: number[];
+}
+
 interface AppData {
   habits: string[];
   checks: Record<string, CheckState>;
   diaries: Record<string, DiaryEntry>;
+  plans: Record<string, PlanItem[]>;
+  habitGroups: HabitGroup[];
 }
 
 // ─── Themes ──────────────────────────────────────────────────────────────────
@@ -169,9 +183,10 @@ const ChevronRight = () => (
 );
 
 // ─── Achievement Graph ────────────────────────────────────────────────────────
-function AchievementGraph({ year, month, habits, checks, accent1, accent2, selectedHabit }: {
+// habitFilter: null = all habits, number[] = specific habit indices to include
+function AchievementGraph({ year, month, habits, checks, accent1, accent2, habitFilter }: {
   year: number; month: number; habits: string[]; checks: Record<string, CheckState>; accent1: string; accent2: string;
-  selectedHabit: number | null; // null = 전체
+  habitFilter: number[] | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -196,15 +211,15 @@ function AchievementGraph({ year, month, habits, checks, accent1, accent2, selec
     ctx.clearRect(0, 0, w, h);
 
     const daysInMonth = getDaysInMonth(year, month);
-    const totalHabits = habits.length;
+    const activeIndices = habitFilter ?? habits.map((_, i) => i);
+    const totalHabits = activeIndices.length;
     if (totalHabits === 0) return;
 
     const padL = 28, padR = 12, padT = 12, padB = 22;
     const graphW = w - padL - padR;
     const graphH = h - padT - padB;
 
-    const isSingle = selectedHabit !== null;
-    const ySteps = isSingle ? 1 : Math.min(totalHabits, 4);
+    const ySteps = Math.min(totalHabits, 4);
 
     // Grid lines
     ctx.strokeStyle = accent1 + 'aa';
@@ -224,7 +239,7 @@ function AchievementGraph({ year, month, habits, checks, accent1, accent2, selec
     ctx.font = '700 9px Nunito, sans-serif';
     ctx.textAlign = 'right';
     for (let i = 0; i <= ySteps; i++) {
-      const label = isSingle ? (i === 0 ? 'X' : 'O') : String(Math.round((i / ySteps) * totalHabits));
+      const label = String(Math.round((i / ySteps) * totalHabits));
       const y = padT + graphH - (i / ySteps) * graphH;
       ctx.fillText(label, padL - 4, y + 3);
     }
@@ -241,24 +256,17 @@ function AchievementGraph({ year, month, habits, checks, accent1, accent2, selec
     // Compute daily points
     const points: { x: number; y: number; count: number; isToday: boolean; future: boolean }[] = [];
     for (let d = 1; d <= daysInMonth; d++) {
-      let count: number;
-      if (isSingle) {
-        const key = checkKey(year, month, d, selectedHabit!);
-        count = checks[key] === 'O' ? 1 : 0;
-      } else {
-        count = habits.reduce((acc, _, idx) => {
-          const key = checkKey(year, month, d, idx);
-          return acc + (checks[key] === 'O' ? 1 : 0);
-        }, 0);
-      }
-      const maxVal = isSingle ? 1 : totalHabits;
+      const count = activeIndices.reduce((acc, idx) => {
+        const key = checkKey(year, month, d, idx);
+        return acc + (checks[key] === 'O' ? 1 : 0);
+      }, 0);
       const isToday = today.getFullYear() === year && today.getMonth() + 1 === month && today.getDate() === d;
       const future = year > today.getFullYear() ||
         (year === today.getFullYear() && month > today.getMonth() + 1) ||
         (year === today.getFullYear() && month === today.getMonth() + 1 && d > today.getDate());
 
       const xPos = padL + ((d - 1) / Math.max(daysInMonth - 1, 1)) * graphW;
-      const yPos = padT + graphH - (count / maxVal) * graphH;
+      const yPos = padT + graphH - (count / totalHabits) * graphH;
       points.push({ x: xPos, y: yPos, count, isToday, future });
     }
 
@@ -279,7 +287,6 @@ function AchievementGraph({ year, month, habits, checks, accent1, accent2, selec
     // Draw dots
     for (const p of points) {
       if (p.future) {
-        // Future: small gray dot
         ctx.beginPath();
         ctx.fillStyle = '#d8e8f0';
         ctx.arc(p.x, padT + graphH, 1.8, 0, Math.PI * 2);
@@ -287,7 +294,6 @@ function AchievementGraph({ year, month, habits, checks, accent1, accent2, selec
         continue;
       }
       if (p.isToday) {
-        // Today: larger with glow
         ctx.beginPath();
         ctx.fillStyle = accent1 + '44';
         ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
@@ -303,7 +309,7 @@ function AchievementGraph({ year, month, habits, checks, accent1, accent2, selec
         ctx.fill();
       }
     }
-  }, [year, month, habits, checks, accent1, accent2, selectedHabit]);
+  }, [year, month, habits, checks, accent1, accent2, habitFilter]);
 
   useEffect(() => {
     draw();
@@ -330,6 +336,8 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     habits: DEFAULT_HABITS,
     checks: {},
     diaries: {},
+    plans: {},
+    habitGroups: [],
   });
   const [year, setYear] = useState(todayY);
   const [month, setMonth] = useState(todayM);
@@ -341,8 +349,19 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   const [diaryText, setDiaryText] = useState('');
   const [showHabitModal, setShowHabitModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
-  const [selectedGraphHabit, setSelectedGraphHabit] = useState<number | null>(null);
+  const [selectedGraphGroup, setSelectedGraphGroup] = useState<string | null>(null); // null = 전체, string = group id
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string | null>(null); // null = 전체
   const [showDatePicker, setShowDatePicker] = useState(false);
+  // 계획 탭
+  const [leftTab, setLeftTab] = useState<'diary' | 'plan'>('diary');
+  const [planModal, setPlanModal] = useState<{ y: number; m: number; d: number } | null>(null);
+  const [planItems, setPlanItems] = useState<PlanItem[]>([]);
+  const [newPlanText, setNewPlanText] = useState('');
+  // 습관 그룹 관리
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [groupHabitSelect, setGroupHabitSelect] = useState<number[]>([]);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [pickerYear, setPickerYear] = useState(todayY);
   const [pickerPos, setPickerPos] = useState({ top: 0, left: 0 });
   const datePickerBtnRef = useRef<HTMLButtonElement>(null);
@@ -405,7 +424,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     // 2. Supabase에서 최신 데이터 로드
     supabase
       .from('user_data')
-      .select('habits, checks, diaries, theme_idx, nickname, updated_at')
+      .select('habits, checks, diaries, plans, habit_groups, theme_idx, nickname, updated_at')
       .eq('user_id', userId)
       .single()
       .then(({ data: row, error }) => {
@@ -438,6 +457,8 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
             habits: row.habits ?? DEFAULT_HABITS,
             checks: row.checks ?? {},
             diaries: row.diaries ?? {},
+            plans: (row as Record<string, unknown>).plans as Record<string, PlanItem[]> ?? {},
+            habitGroups: (row as Record<string, unknown>).habit_groups as HabitGroup[] ?? [],
           };
           console.log('[godlife] loaded data (useLocal=' + useLocal + '):', loaded);
           serverDataRef.current = loaded;
@@ -472,7 +493,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           }
         } else {
           // 첫 로그인 (row 없음) — default 데이터로 serverDataRef 초기화
-          serverDataRef.current = { habits: DEFAULT_HABITS, checks: {}, diaries: {} };
+          serverDataRef.current = { habits: DEFAULT_HABITS, checks: {}, diaries: {}, plans: {}, habitGroups: [] };
           dirtyRef.current = false;
           if (!cachedNickname) setNicknameModal(true);
         }
@@ -501,6 +522,8 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       habits: d.habits,
       checks: d.checks,
       diaries: d.diaries,
+      plans: d.plans,
+      habit_groups: d.habitGroups,
       theme_idx: t,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
@@ -698,69 +721,139 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     setEditingHabitIdx(null);
   };
 
+  // ─── Plan handlers ────────────────────────────────────────────────────────
+  const openPlanModal = (day: number) => {
+    const key = dateKey(year, month, day);
+    setPlanItems(data.plans[key] ? [...data.plans[key]] : []);
+    setNewPlanText('');
+    setPlanModal({ y: year, m: month, d: day });
+    setSelectedDay(day);
+  };
+
+  const addPlanItem = () => {
+    const trimmed = sanitize(newPlanText.trim());
+    if (!trimmed) return;
+    setPlanItems(prev => [...prev, { id: Date.now().toString(), text: trimmed, done: false }]);
+    setNewPlanText('');
+  };
+
+  const togglePlanItem = (id: string) => {
+    setPlanItems(prev => prev.map(item => item.id === id ? { ...item, done: !item.done } : item));
+  };
+
+  const deletePlanItem = (id: string) => {
+    setPlanItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const savePlans = () => {
+    if (!planModal) return;
+    dirtyRef.current = true;
+    const key = dateKey(planModal.y, planModal.m, planModal.d);
+    setData(prev => ({ ...prev, plans: { ...prev.plans, [key]: planItems } }));
+    setPlanModal(null);
+  };
+
+  // ─── Habit group handlers ─────────────────────────────────────────────────
+  const saveGroup = () => {
+    const trimmed = sanitize(newGroupName.trim());
+    if (!trimmed || groupHabitSelect.length === 0) return;
+    dirtyRef.current = true;
+    if (editingGroupId) {
+      setData(prev => ({
+        ...prev,
+        habitGroups: prev.habitGroups.map(g =>
+          g.id === editingGroupId ? { ...g, name: trimmed, habitIndices: groupHabitSelect } : g
+        ),
+      }));
+    } else {
+      const newGroup: HabitGroup = { id: Date.now().toString(), name: trimmed, habitIndices: groupHabitSelect };
+      setData(prev => ({ ...prev, habitGroups: [...prev.habitGroups, newGroup] }));
+    }
+    setNewGroupName('');
+    setGroupHabitSelect([]);
+    setEditingGroupId(null);
+    setShowGroupModal(false);
+  };
+
+  const deleteGroup = (id: string) => {
+    dirtyRef.current = true;
+    setData(prev => ({ ...prev, habitGroups: prev.habitGroups.filter(g => g.id !== id) }));
+    if (selectedGroupFilter === id) setSelectedGroupFilter(null);
+    if (selectedGraphGroup === id) setSelectedGraphGroup(null);
+  };
+
   // ─── Diary Page (Left) ─────────────────────────────────────────────────────
+  // ─── Left page (Diary + Plan) ─────────────────────────────────────────────
+  const sharedLeftHeader = (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '10px 14px 8px',
+      borderBottom: `1.5px dashed ${theme.divider}`,
+      flexShrink: 0,
+    }}>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button onClick={() => setLeftTab('diary')} style={{
+          padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${leftTab === 'diary' ? theme.accent1 : theme.noteBorder}`,
+          background: leftTab === 'diary' ? theme.accent1 : '#fff',
+          color: leftTab === 'diary' ? '#fff' : '#888', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+        }}>일기</button>
+        <button onClick={() => setLeftTab('plan')} style={{
+          padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${leftTab === 'plan' ? theme.accent1 : theme.noteBorder}`,
+          background: leftTab === 'plan' ? theme.accent1 : '#fff',
+          color: leftTab === 'plan' ? '#fff' : '#888', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+        }}>계획</button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <button onClick={prevMonth} style={navBtnStyle}><ChevronLeft /></button>
+        <div style={{ position: 'relative' }}>
+          <button
+            ref={datePickerBtnRef}
+            onClick={() => {
+              const rect = datePickerBtnRef.current?.getBoundingClientRect();
+              if (rect) setPickerPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
+              setPickerYear(year);
+              setShowDatePicker(v => !v);
+            }}
+            style={{ fontSize: 13, fontWeight: 800, color: theme.accent2, minWidth: 60, textAlign: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', borderRadius: 6 }}
+          >
+            {year}.{String(month).padStart(2, '0')}
+          </button>
+          {showDatePicker && (
+            <div style={{
+              position: 'fixed', top: pickerPos.top, left: pickerPos.left, transform: 'translateX(-50%)',
+              background: '#fff', borderRadius: 14, border: `1.5px solid ${theme.noteBorder}`,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.12)', zIndex: 9999, padding: 12, minWidth: 200,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <button onClick={() => setPickerYear(y => y - 1)} style={{ ...navBtnStyle, width: 24, height: 24 }}><ChevronLeft /></button>
+                <span style={{ fontWeight: 800, fontSize: 13, color: '#3a3a3a' }}>{pickerYear}년</span>
+                <button onClick={() => setPickerYear(y => y + 1)} style={{ ...navBtnStyle, width: 24, height: 24 }}><ChevronRight /></button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+                  const isSelected = pickerYear === year && m === month;
+                  return (
+                    <button key={m} onClick={() => { setYear(pickerYear); setMonth(m); setShowDatePicker(false); }}
+                      style={{
+                        padding: '5px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                        background: isSelected ? theme.accent1 : 'transparent',
+                        color: isSelected ? '#fff' : '#555',
+                      }}
+                    >{m}월</button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+        <button onClick={nextMonth} style={navBtnStyle}><ChevronRight /></button>
+      </div>
+    </div>
+  );
+
   const diaryPage = (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 16px 12px',
-        borderBottom: `1.5px dashed ${theme.divider}`,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <DiaryIcon color={theme.accent1} />
-          <span style={{ fontSize: 14, fontWeight: 800, color: '#3a3a3a' }}>일기</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button onClick={prevMonth} style={navBtnStyle}><ChevronLeft /></button>
-          <div style={{ position: 'relative' }}>
-            <button
-              ref={datePickerBtnRef}
-              onClick={() => {
-                const rect = datePickerBtnRef.current?.getBoundingClientRect();
-                if (rect) setPickerPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
-                setPickerYear(year);
-                setShowDatePicker(v => !v);
-              }}
-              style={{ fontSize: 13, fontWeight: 800, color: theme.accent2, minWidth: 60, textAlign: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', borderRadius: 6 }}
-            >
-              {year}.{String(month).padStart(2, '0')}
-            </button>
-            {showDatePicker && (
-              <div style={{
-                position: 'fixed', top: pickerPos.top, left: pickerPos.left, transform: 'translateX(-50%)',
-                background: '#fff', borderRadius: 14, border: `1.5px solid ${theme.noteBorder}`,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.12)', zIndex: 9999, padding: 12, minWidth: 200,
-              }}>
-                {/* 연도 선택 */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <button onClick={() => setPickerYear(y => y - 1)} style={{ ...navBtnStyle, width: 24, height: 24 }}><ChevronLeft /></button>
-                  <span style={{ fontWeight: 800, fontSize: 13, color: '#3a3a3a' }}>{pickerYear}년</span>
-                  <button onClick={() => setPickerYear(y => y + 1)} style={{ ...navBtnStyle, width: 24, height: 24 }}><ChevronRight /></button>
-                </div>
-                {/* 월 선택 */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
-                    const isSelected = pickerYear === year && m === month;
-                    return (
-                      <button key={m} onClick={() => { setYear(pickerYear); setMonth(m); setShowDatePicker(false); }}
-                        style={{
-                          padding: '5px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                          background: isSelected ? theme.accent1 : 'transparent',
-                          color: isSelected ? '#fff' : '#555',
-                        }}
-                      >{m}월</button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-          <button onClick={nextMonth} style={navBtnStyle}><ChevronRight /></button>
-        </div>
-      </div>
-
-      {/* Date list */}
+      {sharedLeftHeader}
       <div
         ref={diaryListRef}
         onScroll={() => { pinnedToToday.current = false; }}
@@ -768,61 +861,81 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       >
         {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
           const dow = getDayOfWeek(year, month, day);
-          const isSat = dow === 6;
-          const isSun = dow === 0;
+          const isSat = dow === 6; const isSun = dow === 0;
           const isToday = year === todayY && month === todayM && day === todayD;
           const isSelected = selectedDay === day;
           const key = dateKey(year, month, day);
           const diary = data.diaries[key];
           const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-
           return (
-            <div
-              key={day}
-              ref={isToday ? todayRowRef : undefined}
-              onClick={() => openDiary(day)}
+            <div key={day} ref={isToday ? todayRowRef : undefined} onClick={() => openDiary(day)}
               style={{
-                display: 'flex', alignItems: 'center',
-                padding: '0 14px',
-                height: 54,
-                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', padding: '0 14px', height: 54, cursor: 'pointer',
                 backgroundColor: isSelected ? 'rgba(160, 210, 240, 0.28)' : 'transparent',
-                borderBottom: `1px dashed ${theme.rowDivider}`,
-                transition: 'background-color 0.15s',
+                borderBottom: `1px dashed ${theme.rowDivider}`, transition: 'background-color 0.15s',
               }}
             >
-              {/* Date + day */}
-              <div style={{ width: 54, flexShrink: 0 }}>
-                <div style={{
-                  fontSize: 15, fontWeight: 800,
-                  color: isSun ? '#f0a8b8' : isSat ? '#90c0e0' : '#3a3a3a',
-                  lineHeight: 1,
-                }}>
-                  {day}
-                </div>
-                <div style={{ fontSize: 9, fontWeight: 600, color: '#aaa', marginTop: 2 }}>
-                  {dayNames[dow]}
-                </div>
+              <div style={{ width: 48, flexShrink: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: isSun ? '#f0a8b8' : isSat ? '#90c0e0' : '#3a3a3a', lineHeight: 1 }}>{day}</div>
+                <div style={{ fontSize: 9, fontWeight: 600, color: '#aaa', marginTop: 2 }}>{dayNames[dow]}</div>
               </div>
-
-              {/* Emotion badge */}
               <div style={{
                 width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
                 backgroundColor: diary?.emotion ? (EMOTION_BG[diary.emotion] || '#f0f0f0') : '#f0f0f0',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13,
-                marginRight: 8,
-              }}>
-                {diary?.emotion || ''}
-              </div>
-
-              {/* Diary preview */}
-              <div style={{
-                fontSize: 11, fontWeight: 600, color: '#aaa',
-                overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                flex: 1,
-              }}>
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, marginRight: 8,
+              }}>{diary?.emotion || ''}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#aaa', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', flex: 1 }}>
                 {diary?.text || ''}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const planPage = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {sharedLeftHeader}
+      <div
+        ref={diaryListRef}
+        onScroll={() => { pinnedToToday.current = false; }}
+        style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}
+      >
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+          const dow = getDayOfWeek(year, month, day);
+          const isSat = dow === 6; const isSun = dow === 0;
+          const isToday = year === todayY && month === todayM && day === todayD;
+          const isSelected = selectedDay === day;
+          const key = dateKey(year, month, day);
+          const items = data.plans[key] || [];
+          const done = items.filter(it => it.done).length;
+          const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+          return (
+            <div key={day} ref={isToday ? todayRowRef : undefined} onClick={() => openPlanModal(day)}
+              style={{
+                display: 'flex', alignItems: 'center', padding: '0 14px', height: 50, cursor: 'pointer',
+                backgroundColor: isSelected ? 'rgba(160, 210, 240, 0.28)' : 'transparent',
+                borderBottom: `1px dashed ${theme.rowDivider}`, transition: 'background-color 0.15s',
+              }}
+            >
+              <div style={{ width: 48, flexShrink: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: isSun ? '#f0a8b8' : isSat ? '#90c0e0' : '#3a3a3a', lineHeight: 1 }}>{day}</div>
+                <div style={{ fontSize: 9, fontWeight: 600, color: '#aaa', marginTop: 2 }}>{dayNames[dow]}</div>
+              </div>
+              {/* 달성률 뱃지 */}
+              {items.length > 0 && (
+                <div style={{
+                  flexShrink: 0, marginRight: 8,
+                  fontSize: 10, fontWeight: 700,
+                  color: done === items.length ? '#80c8a8' : theme.accent2,
+                  background: done === items.length ? '#e8f8ee' : theme.appBg,
+                  borderRadius: 10, padding: '2px 7px',
+                  border: `1px solid ${done === items.length ? '#b0e4c0' : theme.noteBorder}`,
+                }}>{done}/{items.length}</div>
+              )}
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#aaa', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', flex: 1 }}>
+                {items.length === 0 ? '' : items.map(it => (it.done ? '✓ ' : '· ') + it.text).join('  ')}
               </div>
             </div>
           );
@@ -842,6 +955,12 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     backdropFilter: 'blur(4px)',
   };
 
+  // 그룹 필터 적용: 현재 보여줄 habit indices
+  const activeGroup = data.habitGroups.find(g => g.id === selectedGroupFilter);
+  const visibleHabitIndices: number[] = activeGroup
+    ? activeGroup.habitIndices.filter(i => i < data.habits.length)
+    : data.habits.map((_, i) => i);
+
   const habitPage = (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Habit Check - upper half */}
@@ -849,7 +968,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '14px 16px 12px',
+          padding: '10px 16px 8px',
           borderBottom: `1.5px dashed ${theme.divider}`,
           flexShrink: 0,
         }}>
@@ -859,46 +978,45 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {data.habits.length > 0 && (
-              <button
-                onClick={() => setShowManageModal(true)}
-                style={{
-                  fontSize: 12, fontWeight: 700, color: '#aaa',
-                  background: 'none', border: `1px solid ${theme.noteBorder}`,
-                  borderRadius: 8, padding: '3px 10px', cursor: 'pointer',
-                }}
-              >
-                관리
-              </button>
+              <button onClick={() => setShowManageModal(true)}
+                style={{ fontSize: 12, fontWeight: 700, color: '#aaa', background: 'none', border: `1px solid ${theme.noteBorder}`, borderRadius: 8, padding: '3px 10px', cursor: 'pointer' }}>관리</button>
             )}
             {data.habits.length < 8 && (
-              <button
-                onClick={() => setShowHabitModal(true)}
-                style={{
-                  fontSize: 12, fontWeight: 700, color: theme.accent1,
-                  background: 'none', border: `1px solid ${theme.noteBorder}`,
-                  borderRadius: 8, padding: '3px 10px', cursor: 'pointer',
-                }}
-              >
-                + 추가
-              </button>
+              <button onClick={() => setShowHabitModal(true)}
+                style={{ fontSize: 12, fontWeight: 700, color: theme.accent1, background: 'none', border: `1px solid ${theme.noteBorder}`, borderRadius: 8, padding: '3px 10px', cursor: 'pointer' }}>+ 추가</button>
             )}
           </div>
         </div>
 
+        {/* 그룹 필터 탭 */}
+        {data.habitGroups.length > 0 && (
+          <div style={{ display: 'flex', gap: 5, padding: '6px 12px 4px', flexWrap: 'wrap', flexShrink: 0, borderBottom: `1px dashed ${theme.rowDivider}` }}>
+            {[null, ...data.habitGroups].map((g) => {
+              const active = selectedGroupFilter === (g ? g.id : null);
+              return (
+                <button key={g ? g.id : 'all'} onClick={() => setSelectedGroupFilter(g ? g.id : null)}
+                  style={{
+                    padding: '2px 9px', borderRadius: 20, fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                    border: `1.5px solid ${active ? theme.accent1 : theme.noteBorder}`,
+                    background: active ? theme.accent1 : '#fff', color: active ? '#fff' : '#888',
+                  }}>{g ? g.name : '전체'}</button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Table */}
         <div ref={habitListRef} onScroll={() => { habitPinnedToToday.current = false; }} style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
           {data.habits.length === 0 ? (
-            <div style={{ padding: 20, textAlign: 'center', color: '#aaa', fontSize: 12, fontWeight: 600 }}>
-              습관을 추가해보세요
-            </div>
+            <div style={{ padding: 20, textAlign: 'center', color: '#aaa', fontSize: 12, fontWeight: 600 }}>습관을 추가해보세요</div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
                   <th style={{ ...thStyle, width: 38 }}></th>
-                  {data.habits.map((habit, idx) => (
+                  {visibleHabitIndices.map(idx => (
                     <th key={idx} style={thStyle}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#aaa' }}>{habit}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#aaa' }}>{data.habits[idx]}</span>
                     </th>
                   ))}
                 </tr>
@@ -908,37 +1026,22 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
                   const isToday = year === todayY && month === todayM && day === todayD;
                   const isSelected = selectedDay === day;
                   return (
-                    <tr
-                      key={day}
-                      ref={isToday ? todayHabitRowRef : undefined}
-                      style={{
-                        backgroundColor: isSelected
-                          ? 'rgba(160, 210, 240, 0.1)'
-                          : isToday
-                          ? 'rgba(160, 210, 240, 0.07)'
-                          : 'transparent',
-                      }}
-                    >
-                      <td style={{ ...tdStyle, fontSize: 11, fontWeight: 700, color: '#aaa', textAlign: 'center' }}>
-                        {day}
-                      </td>
-                      {data.habits.map((_, habitIdx) => {
+                    <tr key={day} ref={isToday ? todayHabitRowRef : undefined}
+                      style={{ backgroundColor: isSelected ? 'rgba(160,210,240,0.1)' : isToday ? 'rgba(160,210,240,0.07)' : 'transparent' }}>
+                      <td style={{ ...tdStyle, fontSize: 11, fontWeight: 700, color: '#aaa', textAlign: 'center' }}>{day}</td>
+                      {visibleHabitIndices.map(habitIdx => {
                         const key = checkKey(year, month, day, habitIdx);
                         const state = data.checks[key] || '';
                         return (
                           <td key={habitIdx} style={{ ...tdStyle, textAlign: 'center' }}>
-                            <button
-                              onClick={() => toggleCheck(day, habitIdx)}
+                            <button onClick={() => toggleCheck(day, habitIdx)}
                               style={{
-                                width: 26, height: 26, borderRadius: '50%', border: 'none',
-                                cursor: 'pointer',
+                                width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: 'pointer',
                                 backgroundColor: state === 'O' ? '#80c8a8' : state === 'X' ? '#f0a8a8' : '#e0e0e0',
                                 color: state === 'O' ? '#fff' : state === 'X' ? '#fff' : '#bbb',
-                                fontSize: 12, fontWeight: 700,
-                                transition: 'background-color 0.15s',
+                                fontSize: 12, fontWeight: 700, transition: 'background-color 0.15s',
                                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              }}
-                            >
+                              }}>
                               {state === 'O' ? '✓' : state === 'X' ? '✗' : '·'}
                             </button>
                           </td>
@@ -955,31 +1058,32 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
 
       {/* Graph - lower half */}
       <div style={{ flex: '0 0 50%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '12px 16px 10px',
-          borderBottom: `1px dashed ${theme.rowDivider}`,
-          flexShrink: 0,
-        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px 8px', borderBottom: `1px dashed ${theme.rowDivider}`, flexShrink: 0 }}>
           <GraphIcon color={theme.accent1} />
           <span style={{ fontSize: 14, fontWeight: 800, color: '#3a3a3a' }}>달성률 그래프</span>
         </div>
-        {/* 습관 탭 */}
-        <div style={{ display: 'flex', gap: 6, padding: '8px 12px 0', flexWrap: 'wrap', flexShrink: 0 }}>
-          {['전체', ...data.habits].map((label, i) => {
-            const idx = i === 0 ? null : i - 1;
-            const active = selectedGraphHabit === idx;
+        {/* 그룹 탭 */}
+        <div style={{ display: 'flex', gap: 5, padding: '6px 12px 0', flexWrap: 'wrap', flexShrink: 0 }}>
+          {[null, ...data.habitGroups].map((g) => {
+            const active = selectedGraphGroup === (g ? g.id : null);
             return (
-              <button key={i} onClick={() => setSelectedGraphHabit(idx)} style={{
-                padding: '3px 10px', borderRadius: 20, border: `1.5px solid ${active ? theme.accent1 : theme.noteBorder}`,
-                background: active ? theme.accent1 : '#fff',
-                color: active ? '#fff' : '#888', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-              }}>{label}</button>
+              <button key={g ? g.id : 'all'} onClick={() => setSelectedGraphGroup(g ? g.id : null)}
+                style={{
+                  padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  border: `1.5px solid ${active ? theme.accent1 : theme.noteBorder}`,
+                  background: active ? theme.accent1 : '#fff', color: active ? '#fff' : '#888',
+                }}>{g ? g.name : '전체'}</button>
             );
           })}
         </div>
         <div style={{ flex: 1, padding: '6px 12px 4px' }}>
-          <AchievementGraph year={year} month={month} habits={data.habits} checks={data.checks} accent1={theme.accent1} accent2={theme.accent2} selectedHabit={selectedGraphHabit} />
+          {(() => {
+            const graphGroup = data.habitGroups.find(g => g.id === selectedGraphGroup);
+            const graphFilter = graphGroup
+              ? graphGroup.habitIndices.filter(i => i < data.habits.length)
+              : null;
+            return <AchievementGraph year={year} month={month} habits={data.habits} checks={data.checks} accent1={theme.accent1} accent2={theme.accent2} habitFilter={graphFilter} />;
+          })()}
         </div>
       </div>
     </div>
@@ -1122,7 +1226,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
               flexDirection: 'column',
             }}
           >
-            {diaryPage}
+            {leftTab === 'plan' ? planPage : diaryPage}
           </div>
 
           {/* Right page */}
@@ -1405,16 +1509,123 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
                 ))}
               </div>
             )}
-            <button
-              onClick={() => setShowManageModal(false)}
-              style={{
-                width: '100%', padding: '10px 0', borderRadius: 12,
-                border: `1.5px solid ${theme.noteBorder}`, background: '#fff',
-                fontSize: 12, fontWeight: 700, color: '#aaa', cursor: 'pointer',
-              }}
-            >
-              닫기
-            </button>
+            {/* 그룹 관리 섹션 */}
+            <div style={{ borderTop: `1.5px dashed ${theme.divider}`, marginTop: 8, paddingTop: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: '#3a3a3a' }}>그룹</span>
+                <button onClick={() => { setNewGroupName(''); setGroupHabitSelect([]); setEditingGroupId(null); setShowGroupModal(true); }}
+                  style={{ fontSize: 11, fontWeight: 700, color: theme.accent1, background: 'none', border: `1px solid ${theme.noteBorder}`, borderRadius: 8, padding: '2px 8px', cursor: 'pointer' }}>+ 그룹 추가</button>
+              </div>
+              {data.habitGroups.length === 0 ? (
+                <div style={{ fontSize: 11, color: '#bbb', textAlign: 'center', padding: '6px 0' }}>그룹이 없어요</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                  {data.habitGroups.map(g => (
+                    <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 10, background: theme.appBg, border: `1px solid ${theme.noteBorder}` }}>
+                      <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: '#3a3a3a' }}>{g.name}</span>
+                      <span style={{ fontSize: 10, color: '#aaa', marginRight: 4 }}>{g.habitIndices.filter(i => i < data.habits.length).map(i => data.habits[i]).join(', ')}</span>
+                      <button onClick={() => { setEditingGroupId(g.id); setNewGroupName(g.name); setGroupHabitSelect(g.habitIndices); setShowGroupModal(true); }}
+                        style={{ fontSize: 10, color: theme.accent2, background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px' }}>✏️</button>
+                      <button onClick={() => deleteGroup(g.id)}
+                        style={{ width: 20, height: 20, borderRadius: '50%', background: '#f0a8a8', border: 'none', cursor: 'pointer', fontSize: 11, color: '#fff', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setShowManageModal(false)}
+              style={{ width: '100%', padding: '10px 0', borderRadius: 12, border: `1.5px solid ${theme.noteBorder}`, background: '#fff', fontSize: 12, fontWeight: 700, color: '#aaa', cursor: 'pointer' }}>닫기</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Plan Modal ─────────────────────────────────────────────────────── */}
+      {planModal && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) { savePlans(); } }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
+          <div style={{
+            background: '#fff', backgroundImage: 'radial-gradient(circle, #d0d8dc 1.1px, transparent 1.1px)', backgroundSize: '20px 20px',
+            borderRadius: 18, border: `1.5px solid ${theme.noteBorder}`, padding: 20, width: '100%', maxWidth: 380,
+            boxShadow: '0 8px 32px rgba(120,190,230,0.15)',
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#3a3a3a', marginBottom: 14 }}>
+              {planModal.m}월 {planModal.d}일 계획
+            </div>
+            {/* 계획 목록 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12, maxHeight: 240, overflowY: 'auto' }}>
+              {planItems.length === 0 && (
+                <div style={{ fontSize: 12, color: '#bbb', textAlign: 'center', padding: '8px 0' }}>계획을 추가해보세요</div>
+              )}
+              {planItems.map(item => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 10, background: item.done ? '#f0faf4' : theme.appBg, border: `1px solid ${item.done ? '#b0e4c0' : theme.noteBorder}` }}>
+                  <button onClick={() => togglePlanItem(item.id)}
+                    style={{ width: 22, height: 22, borderRadius: '50%', border: 'none', cursor: 'pointer', fontSize: 13, flexShrink: 0,
+                      background: item.done ? '#80c8a8' : '#e0e0e0', color: item.done ? '#fff' : '#bbb',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {item.done ? '✓' : '·'}
+                  </button>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: item.done ? '#80c8a8' : '#3a3a3a', textDecoration: item.done ? 'line-through' : 'none' }}>{item.text}</span>
+                  <button onClick={() => deletePlanItem(item.id)}
+                    style={{ width: 18, height: 18, borderRadius: '50%', background: '#f0a8a8', border: 'none', cursor: 'pointer', fontSize: 10, color: '#fff', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>×</button>
+                </div>
+              ))}
+            </div>
+            {/* 새 계획 입력 */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              <input
+                value={newPlanText} onChange={e => setNewPlanText(e.target.value.slice(0, 30))}
+                onKeyDown={e => { if (e.key === 'Enter') addPlanItem(); }}
+                placeholder="새 계획 입력..."
+                style={{ flex: 1, padding: '8px 12px', border: `1.5px solid ${theme.noteBorder}`, borderRadius: 10, fontSize: 12, fontWeight: 600, fontFamily: "'Nunito', sans-serif", color: '#3a3a3a', outline: 'none' }}
+              />
+              <button onClick={addPlanItem}
+                style={{ padding: '8px 14px', borderRadius: 10, border: 'none', background: theme.accent1, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>추가</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setPlanModal(null)}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 12, border: `1.5px solid ${theme.noteBorder}`, background: '#fff', fontSize: 12, fontWeight: 700, color: '#aaa', cursor: 'pointer' }}>취소</button>
+              <button onClick={savePlans}
+                style={{ flex: 2, padding: '10px 0', borderRadius: 12, border: 'none', background: `linear-gradient(135deg, ${theme.accent1}, ${theme.accent2})`, fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>저장</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Group Modal ────────────────────────────────────────────────────── */}
+      {showGroupModal && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setShowGroupModal(false); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+          <div style={{
+            background: '#fff', backgroundImage: 'radial-gradient(circle, #d0d8dc 1.1px, transparent 1.1px)', backgroundSize: '20px 20px',
+            borderRadius: 18, border: `1.5px solid ${theme.noteBorder}`, padding: 20, width: '100%', maxWidth: 360,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#3a3a3a', marginBottom: 12 }}>{editingGroupId ? '그룹 수정' : '그룹 추가'}</div>
+            <input
+              autoFocus value={newGroupName} onChange={e => setNewGroupName(e.target.value.slice(0, 15))}
+              placeholder="그룹 이름 (최대 15자)"
+              style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${theme.noteBorder}`, borderRadius: 10, fontSize: 13, fontWeight: 600, fontFamily: "'Nunito', sans-serif", color: '#3a3a3a', outline: 'none', marginBottom: 10 }}
+            />
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 6 }}>포함할 습관 선택</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {data.habits.map((habit, idx) => {
+                const selected = groupHabitSelect.includes(idx);
+                return (
+                  <button key={idx} onClick={() => setGroupHabitSelect(prev => selected ? prev.filter(i => i !== idx) : [...prev, idx])}
+                    style={{
+                      padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      border: `1.5px solid ${selected ? theme.accent1 : theme.noteBorder}`,
+                      background: selected ? theme.accent1 : '#fff', color: selected ? '#fff' : '#888',
+                    }}>{habit}</button>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setShowGroupModal(false)}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 12, border: `1.5px solid ${theme.noteBorder}`, background: '#fff', fontSize: 12, fontWeight: 700, color: '#aaa', cursor: 'pointer' }}>취소</button>
+              <button onClick={saveGroup}
+                style={{ flex: 2, padding: '10px 0', borderRadius: 12, border: 'none', background: `linear-gradient(135deg, ${theme.accent1}, ${theme.accent2})`, fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer' }}>저장</button>
+            </div>
           </div>
         </div>
       )}
