@@ -389,6 +389,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   const serverDataRef = useRef<AppData | null>(null); // 서버에서 받은 데이터 보관
   const dirtyRef = useRef(false); // 유저가 실제로 수정했을 때만 true
   const [nickname, setNickname] = useState('');
+  const nicknameRef = useRef(''); // flushSave 클로저에서 최신 nickname 참조용
   const [nicknameModal, setNicknameModal] = useState(false);
   const [nicknameInput, setNicknameInput] = useState('');
 
@@ -428,7 +429,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
 
     // 닉네임 캐시 즉시 적용 (모달 깜빡임 방지)
     const cachedNickname = localStorage.getItem(`godlife-nickname-${userId}`) ?? '';
-    if (cachedNickname) setNickname(cachedNickname);
+    if (cachedNickname) { setNickname(cachedNickname); nicknameRef.current = cachedNickname; }
 
     // 2. Supabase에서 최신 데이터 로드
     supabase
@@ -437,16 +438,10 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       .eq('user_id', userId)
       .single()
       .then(({ data: row, error }) => {
-        console.log('[godlife] supabase load:', { row, error });
-        // row가 없으면 첫 가입으로 처리 (PGRST116 또는 406)
-        if (error && row === null) {
-          // 진짜 에러인지 확인 (row not found는 정상)
-          if (error.code !== 'PGRST116') {
-            console.error('[godlife] load error:', error);
-          }
-          // 어느 쪽이든 row 없음으로 처리 (아래 else 브랜치로 흐름)
-        } else if (error) {
+        // row not found (PGRST116) → 첫 가입, 그 외 에러 → 네트워크/권한 문제
+        if (error && error.code !== 'PGRST116') {
           console.error('[godlife] load error:', error);
+          // 로드 실패 시 닉네임 모달 띄우지 않고 조용히 처리
           setDbLoaded(true);
           return;
         }
@@ -485,6 +480,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
           }
           const savedNickname = row.nickname || cachedNickname;
           setNickname(savedNickname);
+          nicknameRef.current = savedNickname;
           // Supabase에 nickname이 없으면 localStorage 값으로 저장
           if (!row.nickname && cachedNickname) {
             supabase.from('user_data').upsert({ user_id: userId, nickname: cachedNickname, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
@@ -514,6 +510,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
     const trimmed = sanitize(name.trim());
     if (!trimmed) return;
     setNickname(trimmed);
+    nicknameRef.current = trimmed;
     setNicknameModal(false);
     localStorage.setItem(`godlife-nickname-${userId}`, trimmed);
     supabase.from('user_data').upsert({
@@ -534,6 +531,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       plans: d.plans,
       habit_groups: d.habitGroups,
       theme_idx: t,
+      nickname: nicknameRef.current || undefined,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
   }, [userId]);
