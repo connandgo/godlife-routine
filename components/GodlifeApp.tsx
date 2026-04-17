@@ -1530,7 +1530,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
                   {data.habitGroups.map(g => (
                     <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 10, background: theme.appBg, border: `1px solid ${theme.noteBorder}` }}>
                       <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: '#3a3a3a' }}>{g.name}</span>
-                      <span style={{ fontSize: 10, color: '#aaa', marginRight: 4 }}>{g.habitIndices.filter(i => i < data.habits.length).map(i => data.habits[i]).join(', ')}</span>
+                      <span style={{ fontSize: 10, color: '#aaa', marginRight: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 100 }}>{g.habitIndices.filter(i => i < data.habits.length).map(i => data.habits[i]).join(', ')}</span>
                       <button onClick={() => { setEditingGroupId(g.id); setNewGroupName(g.name); setGroupHabitSelect(g.habitIndices); setShowGroupModal(true); }}
                         style={{ fontSize: 10, color: theme.accent2, background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px' }}>✏️</button>
                       <button onClick={() => deleteGroup(g.id)}
