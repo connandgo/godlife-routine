@@ -932,20 +932,18 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
                 <div style={{ fontSize: 15, fontWeight: 800, color: isSun ? '#f0a8b8' : isSat ? '#90c0e0' : '#3a3a3a', lineHeight: 1 }}>{day}</div>
                 <div style={{ fontSize: 9, fontWeight: 600, color: '#aaa', marginTop: 2 }}>{dayNames[dow]}</div>
               </div>
-              {/* 달성률 뱃지 */}
-              {items.length > 0 && (
-                <div style={{
-                  flexShrink: 0, marginRight: 8,
-                  fontSize: 10, fontWeight: 700,
-                  color: done === items.length ? '#80c8a8' : theme.accent2,
-                  background: done === items.length ? '#e8f8ee' : theme.appBg,
-                  borderRadius: 10, padding: '2px 7px',
-                  border: `1px solid ${done === items.length ? '#b0e4c0' : theme.noteBorder}`,
-                }}>{done}/{items.length}</div>
-              )}
               <div style={{ fontSize: 11, fontWeight: 600, color: '#aaa', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', flex: 1 }}>
                 {items.length === 0 ? '' : items.map(it => (it.done ? '✓ ' : '· ') + it.text).join('  ')}
               </div>
+              {/* 달성률 % */}
+              {items.length > 0 && (
+                <div style={{
+                  flexShrink: 0, marginLeft: 6,
+                  fontSize: 11, fontWeight: 800,
+                  color: done === items.length ? '#80c8a8' : theme.accent2,
+                  minWidth: 36, textAlign: 'right',
+                }}>{Math.round(done / items.length * 100)}%</div>
+              )}
             </div>
           );
         })}
