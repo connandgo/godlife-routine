@@ -392,6 +392,15 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
   const [nicknameModal, setNicknameModal] = useState(false);
   const [nicknameInput, setNicknameInput] = useState('');
 
+  // 구버전 데이터에 새 필드 없을 때 기본값 보정
+  const normalizeData = (d: Partial<AppData>): AppData => ({
+    habits: d.habits ?? DEFAULT_HABITS,
+    checks: d.checks ?? {},
+    diaries: d.diaries ?? {},
+    plans: d.plans ?? {},
+    habitGroups: d.habitGroups ?? [],
+  });
+
   // Load from Supabase (+ localStorage fallback)
   useEffect(() => {
     const cacheKey = `godlife-cache-${userId}`;
@@ -407,10 +416,10 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
         const parsed = JSON.parse(cached);
         // { data, savedAt } 형식 또는 구버전 AppData 형식 모두 지원
         if (parsed.savedAt) {
-          setData(parsed.data);
+          setData(normalizeData(parsed.data));
           localSavedAt = parsed.savedAt;
         } else {
-          setData(parsed);
+          setData(normalizeData(parsed));
         }
       }
       const cachedTheme = localStorage.getItem(themeKey);
@@ -449,17 +458,17 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
             try {
               if (!cachedRaw) return null;
               const p = JSON.parse(cachedRaw);
-              return p.savedAt ? p.data : p;
+              return normalizeData(p.savedAt ? p.data : p);
             } catch { return null; }
           })();
 
-          const loaded: AppData = useLocal && localData ? localData : {
+          const loaded: AppData = useLocal && localData ? localData : normalizeData({
             habits: row.habits ?? DEFAULT_HABITS,
             checks: row.checks ?? {},
             diaries: row.diaries ?? {},
             plans: (row as Record<string, unknown>).plans as Record<string, PlanItem[]> ?? {},
             habitGroups: (row as Record<string, unknown>).habit_groups as HabitGroup[] ?? [],
-          };
+          });
           console.log('[godlife] loaded data (useLocal=' + useLocal + '):', loaded);
           serverDataRef.current = loaded;
           dirtyRef.current = false;
