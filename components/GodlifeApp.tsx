@@ -386,6 +386,7 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
 
   const supabase = createClient();
   const [dbLoaded, setDbLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const serverDataRef = useRef<AppData | null>(null); // 서버에서 받은 데이터 보관
   const dirtyRef = useRef(false); // 유저가 실제로 수정했을 때만 true
   const [nickname, setNickname] = useState('');
@@ -436,12 +437,11 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       .from('user_data')
       .select('habits, checks, diaries, plans, habit_groups, theme_idx, nickname, updated_at')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
       .then(({ data: row, error }) => {
-        // row not found (PGRST116) → 첫 가입, 그 외 에러 → 네트워크/권한 문제
-        if (error && error.code !== 'PGRST116') {
-          console.error('[godlife] load error:', error);
-          // 로드 실패 시 닉네임 모달 띄우지 않고 조용히 처리
+        if (error) {
+          console.error('[godlife] load error:', error.code, error.message);
+          setLoadError(`로드 실패: ${error.code} - ${error.message}`);
           setDbLoaded(true);
           return;
         }
@@ -1106,6 +1106,13 @@ export default function GodlifeApp({ userId, userEmail, userSwitcher }: { userId
       fontFamily: "'Nunito', sans-serif",
     }}>
       <div style={{ width: '90%', maxWidth: '90vw' }}>
+        {/* 로드 에러 배너 */}
+        {loadError && (
+          <div style={{ background: '#fff0f0', border: '1px solid #f0a8a8', borderRadius: 10, padding: '8px 14px', marginBottom: 8, fontSize: 11, color: '#c04040', fontWeight: 600 }}>
+            ⚠️ {loadError}<br/>
+            <span style={{ color: '#aaa' }}>userId: {userId.slice(0, 8)}...</span>
+          </div>
+        )}
         {/* App header */}
         <div style={{ marginBottom: 10 }}>
           {/* 제목 */}
